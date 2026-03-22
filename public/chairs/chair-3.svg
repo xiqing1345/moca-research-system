@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 240" fill="none" stroke="currentColor" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Simple chair (side view) - variant B, minimal strokes like chair-2 -->
+  <path d="M125 60 V170" />
+  <path d="M125 60 H195" />
+  <path d="M195 60 V100" />
+  <path d="M125 118 H210" />
+  <path d="M140 118 V170 H230" />
+  <path d="M230 118 V205" />
+  <path d="M140 170 V205" />
+  <path d="M125 170 V205" />
+</svg>

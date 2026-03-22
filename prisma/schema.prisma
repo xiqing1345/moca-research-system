@@ -1,0 +1,86 @@
+// MoCA Research System - Prisma Schema
+// Montreal Cognitive Assessment online testing platform
+
+generator client {
+  provider = "prisma-client-js"
+  engineType = "binary"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ===============================
+// Core Models
+// ===============================
+
+model Participant {
+  id        String   @id @default(cuid())
+  code      String   @unique // Participant code for join
+  createdAt DateTime @default(now())
+
+  sessions Session[]
+
+  @@index([code])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  participantId String
+  
+  // Session state
+  status       String   @default("consent") // consent, intro, task, submitted
+  currentTask  Int      @default(0)
+  
+  // Consent and basic info
+  consentedAt  DateTime?
+  educationYears Int?
+  
+  // Timing
+  startedAt    DateTime @default(now())
+  submittedAt  DateTime?
+  
+  // Memory task word list (shared across Task 5 and Task 10)
+  memoryWordListId String?
+
+  participant  Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  responses    TaskResponse[]
+
+  @@unique([participantId, id])
+  @@index([participantId])
+  @@index([status])
+  @@index([currentTask])
+}
+
+model TaskResponse {
+  id        String   @id @default(cuid())
+  sessionId String
+  taskNumber Int
+  
+  // Timeline
+  startedAt DateTime?
+  endedAt   DateTime?
+  
+  // Raw response data (JSON - task-specific structure)
+  raw       Json?
+  
+  // Event stream (array of events with type, timestamp, metadata)
+  events    Json?
+  
+  // File artifacts (images, audio, etc.)
+  artifacts Json?
+  
+  // Scoring
+  autoScore Int?
+  humanScore Int?
+  needsReview Boolean @default(false)
+  reviewedBy String?
+  reviewedAt DateTime?
+  
+  session   Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  @@unique([sessionId, taskNumber])
+  @@index([sessionId])
+  @@index([needsReview])
+  @@index([taskNumber])
+}
