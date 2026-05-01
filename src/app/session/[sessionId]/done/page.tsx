@@ -21,6 +21,9 @@ type TierRecommendation = {
 };
 
 export default function DonePage() {
+  const WORD_GAME_URL = 'https://word-game-x8v5.vercel.app/';
+  const WORD_GAME_IDS = new Set(['word-chain', 'category-chain', 'letter-fluency']);
+
   const params = useParams();
   const sessionId = params.sessionId as string;
   const [loadingAdvice, setLoadingAdvice] = useState(false);
@@ -28,6 +31,8 @@ export default function DonePage() {
   const [advice, setAdvice] = useState('');
   const [recommendation, setRecommendation] = useState<TierRecommendation | null>(null);
   const [totalScore, setTotalScore] = useState<number | null>(null);
+  const hasWordGameRecommendation =
+    recommendation?.games?.some((game) => WORD_GAME_IDS.has(game.id)) ?? false;
 
   const handleGetAdvice = useCallback(async () => {
     setLoadingAdvice(true);
@@ -130,6 +135,17 @@ export default function DonePage() {
                 </div>
               ))}
             </div>
+
+            {hasWordGameRecommendation && (
+              <a
+                href={WORD_GAME_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-3 inline-block w-full rounded bg-indigo-700 px-4 py-2 text-center text-sm font-semibold text-white hover:bg-indigo-800"
+              >
+                Open Word Game
+              </a>
+            )}
           </div>
         )}
 
