@@ -3,6 +3,26 @@
 import { useState } from 'react';
 import { useSpeechRecognition } from '@/lib/hooks/useSpeechRecognition';
 
+const SPOKEN_DIGIT_MAP: Record<string, string> = {
+  zero: '0',
+  oh: '0',
+  one: '1',
+  two: '2',
+  three: '3',
+  four: '4',
+  five: '5',
+  six: '6',
+  seven: '7',
+  eight: '8',
+  nine: '9',
+};
+
+function normalizeSpokenDigits(text: string) {
+  return text.replace(/\b(zero|oh|one|two|three|four|five|six|seven|eight|nine)\b/gi, (match) => {
+    return SPOKEN_DIGIT_MAP[match.toLowerCase()] ?? match;
+  });
+}
+
 interface TextAnswerProps {
   label: string;
   value: string;
@@ -28,11 +48,12 @@ export function TextAnswer({
     language: 'en-US',
     normalizeSpokenNumbers,
     onResult: (text: string) => {
-      onChange(value ? value + ' ' + text : text);
+      const normalized = normalizeSpokenNumbers ? normalizeSpokenDigits(text) : text;
+      onChange(value ? value + ' ' + normalized : normalized);
       setInterimTranscript('');
     },
     onInterim: (text: string) => {
-      setInterimTranscript(text);
+      setInterimTranscript(normalizeSpokenNumbers ? normalizeSpokenDigits(text) : text);
     },
     onError: (error: string) => {
       console.error('Speech recognition error:', error);

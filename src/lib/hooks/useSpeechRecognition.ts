@@ -126,7 +126,7 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
         recognitionRef.current.abort();
       }
     };
-  }, [language]);
+  }, [language, normalizeSpokenNumbers]);
 
   const startListening = useCallback(() => {
     if (recognitionRef.current && !isListening) {
