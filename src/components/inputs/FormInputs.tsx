@@ -20,7 +20,7 @@ export function TextAnswer({
   placeholder,
   multiline = false,
   rows = 4,
-  normalizeSpokenNumbers = false,
+  normalizeSpokenNumbers = true,
 }: TextAnswerProps) {
   const [interimTranscript, setInterimTranscript] = useState('');
 
