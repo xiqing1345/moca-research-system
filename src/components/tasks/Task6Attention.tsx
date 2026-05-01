@@ -5,10 +5,45 @@ import { NumberInput, TextAnswer } from '@/components/inputs/FormInputs';
 import { useTaskShell } from '@/components/common/TaskShell';
 import { Task6Raw } from '@/lib/types';
 
-function parseDigitList(input: string): number[] {
-  return input
+const SPOKEN_DIGIT_MAP: Record<string, string> = {
+  zero: '0',
+  oh: '0',
+  one: '1',
+  two: '2',
+  three: '3',
+  four: '4',
+  five: '5',
+  six: '6',
+  seven: '7',
+  eight: '8',
+  nine: '9',
+};
+
+function normalizeDigitInput(input: string) {
+  const normalized = input
+    .replace(/\b(zero|oh|one|two|three|four|five|six|seven|eight|nine)\b/gi, (match) => {
+      return SPOKEN_DIGIT_MAP[match.toLowerCase()] ?? match;
+    })
+    .replace(/[^0-9]+/g, ' ')
     .trim()
-    .split(/[^0-9]+/)
+    .replace(/\s+/g, ' ');
+
+  if (/^\d+$/.test(normalized) && normalized.length > 1) {
+    return normalized.split('').join(' ');
+  }
+
+  return normalized;
+}
+
+function parseDigitList(input: string): number[] {
+  const normalized = normalizeDigitInput(input);
+
+  if (!normalized) {
+    return [];
+  }
+
+  return normalized
+    .split(/\s+/)
     .filter(Boolean)
     .map((s) => Number(s))
     .filter((n) => Number.isFinite(n));
@@ -176,27 +211,29 @@ export function Task6Attention() {
   };
 
   const handleDigitForwardChange = (value: string) => {
-    setDigitForwardInput(value);
+    const normalizedValue = normalizeDigitInput(value);
+    setDigitForwardInput(normalizedValue);
     addEvent({
       type: 'input',
       meta: {
         field: 'digitForward',
-        value,
+        value: normalizedValue,
       },
     });
-    computeAndSetRaw({ digitForwardAnswer: parseDigitList(value) });
+    computeAndSetRaw({ digitForwardAnswer: parseDigitList(normalizedValue) });
   };
 
   const handleDigitBackwardChange = (value: string) => {
-    setDigitBackwardInput(value);
+    const normalizedValue = normalizeDigitInput(value);
+    setDigitBackwardInput(normalizedValue);
     addEvent({
       type: 'input',
       meta: {
         field: 'digitBackward',
-        value,
+        value: normalizedValue,
       },
     });
-    computeAndSetRaw({ digitBackwardAnswer: parseDigitList(value) });
+    computeAndSetRaw({ digitBackwardAnswer: parseDigitList(normalizedValue) });
   };
 
   const handleSerial7Change = (index: number, value: number | null) => {
