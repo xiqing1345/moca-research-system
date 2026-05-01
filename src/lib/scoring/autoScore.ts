@@ -164,6 +164,26 @@ function getAllPoints(strokes: DrawStroke[]): DrawPoint[] {
 // ===============================
 
 export function scoreTask2(raw: Task2Raw): number {
+  const grid = raw?.copyGrid;
+  if (grid?.mode === "grid_copy") {
+    const target = new Set(Array.isArray(grid.targetCells) ? grid.targetCells : []);
+    const user = new Set(Array.isArray(grid.userCells) ? grid.userCells : []);
+
+    if (target.size === 0 || user.size === 0) return 0;
+
+    let overlap = 0;
+    for (const cell of user) {
+      if (target.has(cell)) overlap++;
+    }
+
+    const precision = overlap / Math.max(user.size, 1);
+    const recall = overlap / Math.max(target.size, 1);
+    const f1 = precision + recall > 0 ? (2 * precision * recall) / (precision + recall) : 0;
+
+    return f1 >= 0.82 ? 1 : 0;
+  }
+
+  // Legacy fallback: old canvas-based heuristic
   const strokes = Array.isArray(raw?.drawing?.strokes) ? raw.drawing.strokes : [];
   if (!strokes.length) return 0;
 
@@ -188,6 +208,44 @@ export function scoreTask2(raw: Task2Raw): number {
 // ===============================
 
 export function scoreTask3(raw: Task3Raw): number {
+  const mode = raw?.clock?.mode;
+  const answer = raw?.clock?.answer;
+
+  if (mode === "set_hands" && answer) {
+    const target = String(raw?.clock?.targetTime ?? "11:00");
+    const m = target.match(/^(\d{1,2}):(\d{2})$/);
+    const targetHour = m ? Number(m[1]) : 11;
+    const targetMinute = m ? Number(m[2]) : 0;
+
+    const hour = Number(answer.hour);
+    const minute = Number(answer.minute);
+    if (!Number.isFinite(hour) || !Number.isFinite(minute)) return 0;
+
+    const normHour = ((Math.round(hour) - 1 + 12) % 12) + 1;
+    const normMinute = ((Math.round(minute) % 60) + 60) % 60;
+
+    const minuteDiff = Math.min(
+      Math.abs(normMinute - targetMinute),
+      60 - Math.abs(normMinute - targetMinute)
+    );
+
+    const answerHourAngle = ((normHour % 12) + normMinute / 60) * 30;
+    const targetHourAngle = ((targetHour % 12) + targetMinute / 60) * 30;
+    const hourAngleDiff = Math.abs(answerHourAngle - targetHourAngle);
+    const hourDiff = Math.min(hourAngleDiff, 360 - hourAngleDiff);
+
+    let score = 0;
+    const minuteOk = minuteDiff <= 2;
+    const hourOk = hourDiff <= 15;
+
+    if (minuteOk) score++;
+    if (hourOk) score++;
+    if (minuteOk && hourOk) score++;
+
+    return Math.min(score, 3);
+  }
+
+  // Legacy fallback: old free-draw clock heuristic.
   const strokes = Array.isArray(raw?.clock?.strokes) ? (raw.clock.strokes as DrawStroke[]) : [];
   if (!strokes.length) return 0;
 
@@ -413,40 +471,246 @@ export function scoreTask8(raw: Task8Raw): number {
 // Task 9 - Abstraction (0-2, semi-automatic)
 // ===============================
 
-const abstractionKeywords: Record<string, string[]> = {
-  "train-bicycle": [
-    "transport",
-    "transportation",
-    "travel",
-    "travelling",
-    "trip",
-    "vehicle",
+export type Task9Item = "train_bicycle" | "ruler_watch";
+export type Task9Label =
+  | "ABSTRACT_CORRECT"
+  | "CONCRETE_INCORRECT"
+  | "TOO_GENERAL"
+  | "UNCLEAR";
+
+export interface Task9EvaluationResult {
+  item: Task9Item;
+  response: string;
+  normalized_response: string;
+  label: Task9Label;
+  score: 0 | 1;
+  needs_review: boolean;
+  reason: string;
+}
+
+function canonicalTask9Item(pairRaw: string): Task9Item | null {
+  const p = normalizeText(pairRaw).replace(/[\s_]+/g, "-");
+  if (p === "train-bicycle" || p === "bicycle-train") return "train_bicycle";
+  if (p === "watch-ruler" || p === "ruler-watch") return "ruler_watch";
+  return null;
+}
+
+function normalizeTask9Response(input: string): string {
+  let s = String(input ?? "").toLowerCase();
+
+  // Keep Chinese characters while stripping punctuation/symbol noise.
+  s = s
+    .replace(/[.,!?;:()\[\]{}"'`~@#$%^&*+=<>\\/|]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  // Remove common hedging/prefix phrases.
+  s = s
+    .replace(/^i think\s+/g, "")
+    .replace(/^maybe\s+/g, "")
+    .replace(/^they are both\s+/g, "")
+    .replace(/^both are\s+/g, "")
+    .replace(/^they both\s+/g, "");
+
+  // Synonym normalization requested in spec.
+  s = s
+    .replace(/\btravelling\b/g, "travel")
+    .replace(/\btraveling\b/g, "travel")
+    .replace(/\btransportation\b/g, "transport")
+    .replace(/\bvehicles\b/g, "vehicle")
+    .replace(/\bmeasuring\b/g, "measure")
+    .replace(/\bmeasurement\b/g, "measure")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return s;
+}
+
+const TASK9_GENERAL_PATTERNS = [
+  "object",
+  "objects",
+  "thing",
+  "things",
+  "item",
+  "items",
+  "tool",
+  "tools",
+  "useful things",
+  "man made",
+  "man-made",
+  "things we use",
+  "物体",
+  "东西",
+  "物品",
+  "工具",
+  "有用",
+  "人造",
+  "平时会用",
+];
+
+const TASK9_CONCRETE_PATTERNS: Record<Task9Item, string[]> = {
+  train_bicycle: [
+    "wheel",
+    "wheels",
+    "move",
+    "seat",
+    "seats",
+    "metal",
+    "man made",
+    "man-made",
+    "long",
+    "都有轮子",
+    "都会动",
+    "都有座位",
+    "金属",
+    "人造",
   ],
-  "watch-ruler": [
-    "measure",
-    "measuring",
-    "measurement",
-    "instrument",
-    "tool",
+  ruler_watch: [
+    "number",
+    "numbers",
+    "mark",
+    "marks",
+    "hand",
+    "hands",
+    "small",
+    "object",
+    "objects",
+    "都有数字",
+    "都有刻度",
+    "都有指针",
+    "都很小",
+    "都是物体",
   ],
-  // MoCA 8.2 variants (for future compatibility)
-  "bed-table": ["furniture", "furnishing"],
-  "letter-telephone": ["communication", "communicate", "correspond"],
 };
 
-export function scoreTask9(raw: Task9Raw): number {
-  const items = Array.isArray(raw?.abstraction) ? raw.abstraction : [];
-  if (!items.length) return 0;
+const TASK9_ABSTRACT_PATTERNS: Record<Task9Item, string[]> = {
+  train_bicycle: [
+    "transport",
+    "means of transport",
+    "means of travel",
+    "travel",
+    "vehicle",
+    "used to travel",
+    "used for getting around",
+    "get from one place to another",
+    "trip",
+    "交通工具",
+    "出行工具",
+    "用于旅行",
+    "用于移动",
+    "到达别处",
+  ],
+  ruler_watch: [
+    "measure",
+    "measuring instrument",
+    "measuring tool",
+    "used to measure",
+    "for measure",
+    "for measuring",
+    "测量工具",
+    "计量工具",
+    "用来测量",
+    "都可以测量",
+  ],
+};
 
-  let score = 0;
-  for (const item of items) {
-    const pair = normalizeText(String(item?.pair ?? "")).replace(/\s+/g, "");
-    const answer = normalizeText(String(item?.answer ?? ""));
-    if (!pair || !answer) continue;
-    const keys = abstractionKeywords[pair] ?? [];
-    if (keys.some((k) => answer.includes(k))) score++;
+function containsAny(text: string, patterns: string[]): boolean {
+  return patterns.some((p) => text.includes(p));
+}
+
+export function evaluateTask9Item(input: {
+  item: Task9Item;
+  response: string;
+}): Task9EvaluationResult {
+  const response = String(input.response ?? "");
+  const normalized = normalizeTask9Response(response);
+
+  if (!normalized || normalized.length < 2) {
+    return {
+      item: input.item,
+      response,
+      normalized_response: normalized,
+      label: "UNCLEAR",
+      score: 0,
+      needs_review: true,
+      reason: "Response is too short or ambiguous to classify reliably.",
+    };
   }
 
+  const hitAbstract = containsAny(normalized, TASK9_ABSTRACT_PATTERNS[input.item]);
+  const hitGeneral = containsAny(normalized, TASK9_GENERAL_PATTERNS);
+  const hitConcrete = containsAny(normalized, TASK9_CONCRETE_PATTERNS[input.item]);
+
+  // Correct abstract category overrides generic wording if both appear.
+  if (hitAbstract) {
+    return {
+      item: input.item,
+      response,
+      normalized_response: normalized,
+      label: "ABSTRACT_CORRECT",
+      score: 1,
+      needs_review: false,
+      reason: "Response matches the required abstract common category.",
+    };
+  }
+
+  if (hitConcrete) {
+    return {
+      item: input.item,
+      response,
+      normalized_response: normalized,
+      label: "CONCRETE_INCORRECT",
+      score: 0,
+      needs_review: false,
+      reason: "Response describes concrete/surface similarity, not abstraction category.",
+    };
+  }
+
+  if (hitGeneral) {
+    return {
+      item: input.item,
+      response,
+      normalized_response: normalized,
+      label: "TOO_GENERAL",
+      score: 0,
+      needs_review: true,
+      reason: "Response is overly general and does not reach the target abstraction level.",
+    };
+  }
+
+  return {
+    item: input.item,
+    response,
+    normalized_response: normalized,
+    label: "UNCLEAR",
+    score: 0,
+    needs_review: true,
+    reason: "Response cannot be mapped to correct abstraction with sufficient certainty.",
+  };
+}
+
+export function evaluateTask9Raw(raw: Task9Raw): Task9EvaluationResult[] {
+  const items = Array.isArray(raw?.abstraction) ? raw.abstraction : [];
+  const out: Task9EvaluationResult[] = [];
+
+  for (const item of items) {
+    const canonical = canonicalTask9Item(String(item?.pair ?? ""));
+    if (!canonical) continue;
+    out.push(
+      evaluateTask9Item({
+        item: canonical,
+        response: String(item?.answer ?? ""),
+      })
+    );
+  }
+
+  return out;
+}
+
+export function scoreTask9(raw: Task9Raw): number {
+  const evaluations = evaluateTask9Raw(raw);
+  if (!evaluations.length) return 0;
+  const score = evaluations.reduce((sum, e) => sum + e.score, 0);
   return Math.min(score, 2);
 }
 

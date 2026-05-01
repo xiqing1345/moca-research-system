@@ -22,13 +22,13 @@ const TASK_CONFIGS = {
     defaultNeedsReview: false,
   },
   2: {
-    title: 'Copy Cube/Chair',
-    description: 'Copy the cube and chair drawing',
+    title: 'Copy Chair',
+    description: 'Copy the target chair pattern on the same-size grid',
     defaultNeedsReview: true,
   },
   3: {
     title: 'Clock Drawing',
-    description: 'Draw a clock showing a specific time',
+    description: 'Adjust the preset clock hands to show a specific time',
     defaultNeedsReview: true,
   },
   4: {

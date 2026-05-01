@@ -92,6 +92,9 @@ export function Task5MemoryImmediate() {
     syncRaw(trial1, value);
   };
 
+  const hasCompletedTwoTrials =
+    parseWordList(trial1).length > 0 && parseWordList(trial2).length > 0;
+
   useEffect(() => {
     if (!raw?.memoryImmediate) {
       syncRaw(trial1, trial2);
@@ -177,6 +180,13 @@ export function Task5MemoryImmediate() {
           rows={3}
         />
       </section>
+
+      {hasCompletedTwoTrials && (
+        <div className="rounded border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          You have completed both recall rounds. Later in this test, you will be asked to recall
+          these words again.
+        </div>
+      )}
     </div>
   );
 }

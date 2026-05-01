@@ -60,7 +60,24 @@ export interface Task1Raw {
 
 // Task 2 - Copy Cube/Chair
 export interface Task2Raw {
-  drawing: {
+  copyGrid?: {
+    mode: "grid_copy";
+    size: number;
+    prompt: {
+      kind: "chair";
+      chairId: string;
+    };
+    targetCells: string[];
+    userCells: string[];
+    stats?: {
+      overlap: number;
+      precision: number;
+      recall: number;
+      f1: number;
+    };
+  };
+  // Legacy fallback for old records.
+  drawing?: {
     tool: "canvas";
     prompt?: {
       kind: 'chair';
@@ -81,7 +98,14 @@ export interface Task2Raw {
 // Task 3 - Clock Drawing
 export interface Task3Raw {
   clock: {
-    strokes: Array<{
+    mode?: "set_hands" | "draw";
+    // New mode: preset clock face, user adjusts hand positions.
+    answer?: {
+      hour: number;   // 1-12
+      minute: number; // 0-59
+    };
+    // Legacy fallback: old free-draw clock data.
+    strokes?: Array<{
       id: string;
       points: Array<{
         x: number;

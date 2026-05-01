@@ -7,12 +7,19 @@ import { TextAnswer } from '@/components/inputs/FormInputs';
 export default function JoinPage() {
   const router = useRouter();
   const [participantCode, setParticipantCode] = useState('');
+  const [currentPlace, setCurrentPlace] = useState('');
+  const [currentCity, setCurrentCity] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const handleJoin = async () => {
     if (!participantCode.trim()) {
       setError('Please enter a participant code');
+      return;
+    }
+
+    if (!currentCity.trim() || !currentPlace.trim()) {
+      setError('Please enter the city and place where you are now');
       return;
     }
 
@@ -23,7 +30,11 @@ export default function JoinPage() {
       const response = await fetch('/api/participants', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: participantCode.trim() }),
+        body: JSON.stringify({
+          code: participantCode.trim(),
+          city: currentCity.trim(),
+          place: currentPlace.trim(),
+        }),
       });
 
       const data = await response.json().catch(() => null);
@@ -59,6 +70,18 @@ export default function JoinPage() {
             value={participantCode}
             onChange={setParticipantCode}
             placeholder="Enter your participant code"
+          />
+          <TextAnswer
+            label="City where you are now"
+            value={currentCity}
+            onChange={setCurrentCity}
+            placeholder="Enter the city where you are now"
+          />
+          <TextAnswer
+            label="Place where you are now"
+            value={currentPlace}
+            onChange={setCurrentPlace}
+            placeholder="Enter the place where you are now"
           />
           {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
         </div>

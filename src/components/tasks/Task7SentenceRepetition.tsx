@@ -122,6 +122,26 @@ export function Task7SentenceRepetition() {
     syncRaw(rec1Ref.current, next);
   };
 
+  const updateTranscriptText = (item: 1 | 2, text: string) => {
+    const normalized = normalizeTranscript(text);
+    const base = item === 1 ? rec1Ref.current : rec2Ref.current;
+
+    if (!normalized) {
+      const { transcript: _ignored, ...rest } = base;
+      applyRecordingState(item, rest);
+      return;
+    }
+
+    const transcriptMeta: TranscriptMeta = {
+      text: normalized,
+      confidence: base.transcript?.confidence,
+      engine: base.transcript?.engine ?? 'webspeech',
+      updatedAt: new Date().toISOString(),
+    };
+
+    applyRecordingState(item, { ...base, transcript: transcriptMeta });
+  };
+
   const stopSpeechRecognition = () => {
     const recognition = recognitionRef.current;
     if (!recognition) return;
@@ -446,6 +466,15 @@ export function Task7SentenceRepetition() {
             {rec1.recorded ? 'Recorded' : 'Not recorded'}
           </div>
         </div>
+        <div className="mt-3">
+          <label className="block text-xs text-gray-600 mb-1">Transcription (auto-filled)</label>
+          <textarea
+            className="w-full min-h-[80px] rounded border border-gray-300 p-2 text-sm"
+            placeholder="Speech-to-text result will appear here automatically."
+            value={rec1.transcript?.text ?? ''}
+            onChange={(e) => updateTranscriptText(1, e.target.value)}
+          />
+        </div>
       </section>
 
       <section className="p-4 border border-gray-200 rounded">
@@ -473,6 +502,15 @@ export function Task7SentenceRepetition() {
           <div className="text-sm text-gray-700">
             {rec2.recorded ? 'Recorded' : 'Not recorded'}
           </div>
+        </div>
+        <div className="mt-3">
+          <label className="block text-xs text-gray-600 mb-1">Transcription (auto-filled)</label>
+          <textarea
+            className="w-full min-h-[80px] rounded border border-gray-300 p-2 text-sm"
+            placeholder="Speech-to-text result will appear here automatically."
+            value={rec2.transcript?.text ?? ''}
+            onChange={(e) => updateTranscriptText(2, e.target.value)}
+          />
         </div>
       </section>
 
