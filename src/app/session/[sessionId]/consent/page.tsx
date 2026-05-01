@@ -3,6 +3,7 @@
 import { useRouter, useParams } from 'next/navigation';
 import { useState } from 'react';
 import { NumberInput } from '@/components/inputs/FormInputs';
+import { loadLocalSession, saveLocalSession } from '@/lib/utils/localSession';
 
 export default function ConsentPage() {
   const router = useRouter();
@@ -29,18 +30,23 @@ export default function ConsentPage() {
     setError('');
 
     try {
-      const response = await fetch(`/api/sessions/${sessionId}/consent`, {
+      // Save consent data to localStorage.
+      const session = loadLocalSession(sessionId);
+      if (session) {
+        saveLocalSession({
+          ...session,
+          educationYears,
+          consentedAt: new Date().toISOString(),
+          status: 'intro',
+        });
+      }
+
+      // Fire-and-forget API call (no-op on server).
+      fetch(`/api/sessions/${sessionId}/consent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          consentedAt: new Date().toISOString(),
-          educationYears,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to submit consent');
-      }
+        body: JSON.stringify({ consentedAt: new Date().toISOString(), educationYears }),
+      }).catch(() => {});
 
       router.push(`/session/${sessionId}/intro`);
     } catch (err) {

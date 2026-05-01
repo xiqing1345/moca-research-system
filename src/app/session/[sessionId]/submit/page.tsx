@@ -2,6 +2,7 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { loadLocalSession, saveLocalSession } from '@/lib/utils/localSession';
 
 export default function SubmitPage() {
   const params = useParams();
@@ -16,16 +17,10 @@ export default function SubmitPage() {
     setError('');
 
     try {
-      const response = await fetch(`/api/sessions/${sessionId}/submit`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          submittedAt: new Date().toISOString(),
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to submit');
+      // Mark submitted in localStorage.
+      const session = loadLocalSession(sessionId);
+      if (session) {
+        saveLocalSession({ ...session, status: 'submitted' });
       }
 
       router.push(`/session/${sessionId}/done`);

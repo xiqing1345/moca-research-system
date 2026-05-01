@@ -39,8 +39,22 @@ export default function DonePage() {
     setAdviceError('');
 
     try {
+      // Read task responses from localStorage and send them to the advice endpoint.
+      let responses: any[] = [];
+      try {
+        const raw = localStorage.getItem(`moca_session_${sessionId}`);
+        if (raw) {
+          const session = JSON.parse(raw);
+          responses = Object.values(session.responses ?? {});
+        }
+      } catch {
+        // ignore storage errors
+      }
+
       const response = await fetch(`/api/sessions/${sessionId}/advice`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ responses }),
       });
 
       const data = await response.json().catch(() => null);

@@ -2,6 +2,7 @@
 
 import { useRouter, useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { loadLocalSession, saveLocalSession } from '@/lib/utils/localSession';
 
 export default function IntroPage() {
   const router = useRouter();
@@ -12,47 +13,30 @@ export default function IntroPage() {
   const [currentTask, setCurrentTask] = useState(1);
 
   useEffect(() => {
-    const loadSession = async () => {
-      try {
-        const response = await fetch(`/api/sessions/${sessionId}`);
-        if (!response.ok) return;
-        const data = await response.json();
-        const nextTask = Math.min(Math.max(data.session?.currentTask ?? 1, 1), 11);
-        setCurrentTask(nextTask);
-
-        if (data.session?.status === 'submitted') {
-          router.replace(`/session/${sessionId}/done`);
-        }
-
-        if (data.session?.status === 'consent') {
-          router.replace(`/session/${sessionId}/consent`);
-        }
-      } catch (error) {
-        console.error('Failed to load session:', error);
-      }
-    };
-
-    loadSession();
+    const session = loadLocalSession(sessionId);
+    if (!session) return;
+    const nextTask = Math.min(Math.max(session.currentTask ?? 1, 1), 11) || 1;
+    setCurrentTask(nextTask);
+    if (session.status === 'submitted') {
+      router.replace(`/session/${sessionId}/done`);
+    }
+    if (session.status === 'consent') {
+      router.replace(`/session/${sessionId}/consent`);
+    }
   }, [router, sessionId]);
 
   const handleStart = async () => {
     setLoading(true);
-
-    try {
-      const response = await fetch(`/api/sessions/${sessionId}/start`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+    // Update localStorage status.
+    const session = loadLocalSession(sessionId);
+    if (session) {
+      saveLocalSession({
+        ...session,
+        status: 'task',
+        currentTask: session.currentTask > 0 ? session.currentTask : 1,
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to start task');
-      }
-
-      router.push(`/session/${sessionId}/task/${currentTask}`);
-    } catch (error) {
-      console.error('Failed to start:', error);
-      setLoading(false);
     }
+    router.push(`/session/${sessionId}/task/${currentTask}`);
   };
 
   return (

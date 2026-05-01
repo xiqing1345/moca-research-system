@@ -76,6 +76,32 @@ export function TaskShell({
     }
   }, [initialRaw, initialEvents, initialArtifacts, initialStartedAt]);
 
+  // Persist current task state to localStorage.
+  const persistToLocalStorage = useCallback((autoScore?: number) => {
+    if (typeof window === 'undefined') return;
+    try {
+      const key = `moca_session_${sessionId}`;
+      const stored = JSON.parse(localStorage.getItem(key) ?? '{}');
+      const responses = stored.responses ?? {};
+      responses[taskNumber] = {
+        ...(responses[taskNumber] ?? {}),
+        taskNumber,
+        raw: rawRef.current,
+        events: eventsRef.current,
+        artifacts: artifactsRef.current,
+        startedAt: startedAtRef.current,
+        ...(autoScore !== undefined ? { autoScore } : {}),
+      };
+      // Track memory word list ID for Task 10.
+      if (taskNumber === 5 && rawRef.current?.memoryImmediate?.wordListId) {
+        stored.memoryWordListId = rawRef.current.memoryImmediate.wordListId;
+      }
+      localStorage.setItem(key, JSON.stringify({ ...stored, responses }));
+    } catch {
+      // Ignore quota/storage errors.
+    }
+  }, [sessionId, taskNumber]);
+
   // Auto-save every 8 seconds
   const autoSave = useCallback(async () => {
     if (!rawRef.current && eventsRef.current.length === 0) return;
@@ -100,7 +126,9 @@ export function TaskShell({
       );
 
       if (response.ok) {
+        const data = await response.json().catch(() => ({}));
         setLastSaved(new Date());
+        persistToLocalStorage(data.autoScore);
       }
     } catch (error) {
       console.error('Auto-save failed:', error);
@@ -135,7 +163,12 @@ export function TaskShell({
     // Force save before moving to next task
     await autoSave();
 
-    await fetch(`/api/sessions/${sessionId}/save`, {
+    const finalEvents = [
+      ...eventsRef.current,
+      { type: 'submit' as const, taskNumber, t: Date.now() },
+    ];
+
+    const res = await fetch(`/api/sessions/${sessionId}/save`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -143,19 +176,39 @@ export function TaskShell({
         startedAt: startedAtRef.current,
         endedAt: new Date().toISOString(),
         raw: rawRef.current,
-        events: [
-          ...eventsRef.current,
-          {
-            type: 'submit',
-            taskNumber,
-            t: Date.now(),
-          },
-        ],
+        events: finalEvents,
         artifacts: artifactsRef.current,
         needsReview: defaultNeedsReview,
         currentTask: taskNumber + 1,
       } as SaveTaskRequest),
     });
+
+    // Update localStorage with final state + advance currentTask.
+    try {
+      const data = await res.json().catch(() => ({}));
+      if (typeof window !== 'undefined') {
+        const key = `moca_session_${sessionId}`;
+        const stored = JSON.parse(localStorage.getItem(key) ?? '{}');
+        const responses = stored.responses ?? {};
+        responses[taskNumber] = {
+          ...(responses[taskNumber] ?? {}),
+          taskNumber,
+          raw: rawRef.current,
+          events: finalEvents,
+          artifacts: artifactsRef.current,
+          startedAt: startedAtRef.current,
+          endedAt: new Date().toISOString(),
+          ...(data.autoScore !== undefined ? { autoScore: data.autoScore } : {}),
+        };
+        const nextCurrent = Math.max(stored.currentTask ?? 0, taskNumber + 1);
+        localStorage.setItem(
+          key,
+          JSON.stringify({ ...stored, responses, currentTask: nextCurrent, status: 'task' })
+        );
+      }
+    } catch {
+      // Ignore storage errors.
+    }
 
     if (onNext) onNext();
   }, [sessionId, taskNumber, defaultNeedsReview, autoSave, onNext, debugSkipSave]);

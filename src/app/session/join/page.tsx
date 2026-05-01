@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { TextAnswer } from '@/components/inputs/FormInputs';
+import { createLocalSession } from '@/lib/utils/localSession';
 
 export default function JoinPage() {
   const router = useRouter();
@@ -45,6 +46,9 @@ export default function JoinPage() {
           `Join failed (HTTP ${response.status})`;
         throw new Error(msg);
       }
+
+      // Create localStorage session so all subsequent pages can read state.
+      createLocalSession(data.sessionId, participantCode.trim());
 
       router.push(data.nextPath ?? `/session/${data.sessionId}/consent`);
     } catch (err) {

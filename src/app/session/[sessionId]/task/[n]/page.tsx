@@ -14,6 +14,7 @@ import { Task8VerbalFluency } from '@/components/tasks/Task8VerbalFluency';
 import { Task9Abstraction } from '@/components/tasks/Task9Abstraction';
 import { Task10DelayedRecall } from '@/components/tasks/Task10DelayedRecall';
 import { Task11Orientation } from '@/components/tasks/Task11Orientation';
+import { loadLocalSession, saveLocalSession } from '@/lib/utils/localSession';
 
 const TASK_CONFIGS = {
   1: {
@@ -129,53 +130,41 @@ export default function TaskPage() {
   const [initialStartedAt, setInitialStartedAt] = useState<string | undefined>(undefined);
 
   useEffect(() => {
-    const loadSession = async () => {
-      try {
-        const response = await fetch(`/api/sessions/${sessionId}`);
-        if (!response.ok) {
-          setError('Failed to load session');
-          return;
-        }
+    // Load state from localStorage instead of API.
+    const session = loadLocalSession(sessionId);
 
-        const data = await response.json();
+    if (!session) {
+      setError('Session not found. Please start again from /session/join.');
+      setLoading(false);
+      return;
+    }
 
-        if (data.session?.status === 'submitted') {
-          router.replace(`/session/${sessionId}/done`);
-          return;
-        }
+    if (session.status === 'submitted') {
+      router.replace(`/session/${sessionId}/done`);
+      return;
+    }
 
-        const currentTask = Math.min(Math.max(data.session?.currentTask ?? 1, 1), 11);
+    if (taskNumber > 11) {
+      router.replace(`/session/${sessionId}/submit`);
+      return;
+    }
 
-        if (taskNumber > 11) {
-          router.replace(`/session/${sessionId}/done`);
-          return;
-        }
+    const currentTask = Math.min(Math.max(session.currentTask ?? 1, 1), 11) || 1;
 
-        if (!debug && currentTask !== taskNumber) {
-          router.replace(`/session/${sessionId}/task/${currentTask}`);
-          return;
-        }
+    if (!debug && currentTask !== taskNumber) {
+      router.replace(`/session/${sessionId}/task/${currentTask}`);
+      return;
+    }
 
-        const existingResponse = (data.session?.responses ?? []).find(
-          (r: any) => r.taskNumber === taskNumber
-        );
+    const existingResponse = session.responses[taskNumber];
+    if (existingResponse) {
+      setInitialRaw(existingResponse.raw ?? null);
+      setInitialEvents(existingResponse.events ?? []);
+      setInitialArtifacts(existingResponse.artifacts ?? undefined);
+      setInitialStartedAt(existingResponse.startedAt ?? undefined);
+    }
 
-        if (existingResponse) {
-          setInitialRaw(existingResponse.raw ?? null);
-          setInitialEvents(existingResponse.events ?? []);
-          setInitialArtifacts(existingResponse.artifacts ?? undefined);
-          setInitialStartedAt(existingResponse.startedAt ?? undefined);
-        }
-
-        setLoading(false);
-      } catch (err) {
-        console.error('Error loading session:', err);
-        setError('Failed to load session');
-        setLoading(false);
-      }
-    };
-
-    loadSession();
+    setLoading(false);
   }, [sessionId, taskNumber, router, debug]);
 
   const handleNext = () => {

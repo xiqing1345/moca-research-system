@@ -1,8 +1,7 @@
-import { prisma } from '@/lib/prisma/client';
 import { calculateAutoScore } from '@/lib/scoring/autoScore';
 import { getGamesByMocaScore } from '@/lib/gameRecommendations';
 import { generateAssessmentAdvice, getConfiguredAdviceInfo } from '@/lib/openai';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
 
@@ -89,7 +88,7 @@ function summarizeAnswer(taskNumber: number, raw: any): string {
 }
 
 export async function POST(
-  _req: Request,
+  req: NextRequest,
   { params }: { params: Promise<{ sessionId: string }> }
 ) {
   try {
@@ -103,27 +102,18 @@ export async function POST(
 
     const { sessionId } = await params;
 
-    const session = await prisma.session.findUnique({
-      where: { id: sessionId },
-      include: {
-        participant: true,
-        responses: true,
-      },
-    });
-
-    if (!session) {
-      return NextResponse.json({ ok: false, error: 'Session not found' }, { status: 404 });
-    }
+    // Responses are passed from the client (localStorage) in the request body.
+    const body = await req.json().catch(() => ({}));
+    const responses: any[] = Array.isArray(body.responses) ? body.responses : [];
 
     const byTask = new Map<number, any>();
-    for (const r of session.responses ?? []) {
+    for (const r of responses) {
       byTask.set(Number(r.taskNumber), r);
     }
 
     const reportLines: string[] = [];
-    reportLines.push(`Participant code: ${session.participant?.code ?? '-'}`);
-    reportLines.push(`Session id: ${session.id}`);
-    reportLines.push(`Submitted at: ${session.submittedAt ? new Date(session.submittedAt).toISOString() : '-'}`);
+    reportLines.push(`Session id: ${sessionId}`);
+    reportLines.push(`Generated at: ${new Date().toISOString()}`);
 
     let total = 0;
     for (let taskNumber = 1; taskNumber <= 11; taskNumber++) {

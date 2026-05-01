@@ -1,22 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
-import path from 'node:path';
-import fs from 'node:fs/promises';
+﻿import { NextRequest, NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
-
-function sanitizeId(value: string) {
-  // Keep it simple and safe for filesystem paths.
-  return value.replace(/[^a-zA-Z0-9_-]/g, '_');
-}
-
-function getArtifactsDir() {
-  // Relative to project root at runtime.
-  return process.env.ARTIFACTS_DIR || path.join(process.cwd(), 'storage');
-}
-
-function sanitizeLabel(value: string) {
-  return value.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40);
-}
 
 function guessExtension(mime: string) {
   const m = mime.toLowerCase();
@@ -37,72 +21,57 @@ function guessKind(mime: string): 'png' | 'audio' | 'other' {
   return 'other';
 }
 
+// Artifacts are encoded as base64 data URLs so no file system is required.
+// The data URL is stored in the client localStorage via the artifact metadata.
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ sessionId: string }> }
 ) {
   try {
-    const { sessionId } = await params;
-    const safeSessionId = sanitizeId(sessionId);
-
+    await params;
     const formData = await req.formData();
     const file = formData.get('file');
-    const taskNumberRaw = formData.get('taskNumber');
-    const labelRaw = formData.get('label');
 
     if (!(file instanceof File)) {
-      return NextResponse.json(
-        { ok: false, error: 'Missing file' },
-        { status: 400 }
-      );
+      return NextResponse.json({ ok: false, error: 'Missing file' }, { status: 400 });
     }
 
+    const taskNumberRaw = formData.get('taskNumber');
+    const labelRaw = formData.get('label');
     const taskNumber = Number(taskNumberRaw);
+
     if (!Number.isFinite(taskNumber) || taskNumber < 1 || taskNumber > 11) {
-      return NextResponse.json(
-        { ok: false, error: 'Invalid taskNumber' },
-        { status: 400 }
-      );
+      return NextResponse.json({ ok: false, error: 'Invalid taskNumber' }, { status: 400 });
     }
 
     const mime = file.type || 'application/octet-stream';
-    const ext = guessExtension(mime);
     const kind = guessKind(mime);
-
-    const label = typeof labelRaw === 'string' && labelRaw.trim() ? sanitizeLabel(labelRaw.trim()) : '';
-
+    const ext = guessExtension(mime);
+    const label =
+      typeof labelRaw === 'string' && labelRaw.trim()
+        ? labelRaw.trim().replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40)
+        : '';
     const ts = new Date().toISOString().replace(/[:.]/g, '-');
     const baseName = label
       ? `task${taskNumber}_${label}_${ts}.${ext}`
       : `task${taskNumber}_${ts}.${ext}`;
 
-    const dir = path.join(getArtifactsDir(), safeSessionId);
-    await fs.mkdir(dir, { recursive: true });
-
-    const diskPath = path.join(dir, baseName);
     const buf = Buffer.from(await file.arrayBuffer());
-    await fs.writeFile(diskPath, buf);
-
-    const relativePath = path
-      .relative(process.cwd(), diskPath)
-      .split(path.sep)
-      .join('/');
+    const dataUrl = `data:${mime};base64,${buf.toString('base64')}`;
 
     return NextResponse.json({
       ok: true,
       file: {
-        kind: kind,
-        path: relativePath,
-        mime: mime,
+        kind,
+        path: dataUrl,
+        name: baseName,
+        mime,
         size: buf.length,
         createdAt: new Date().toISOString(),
       },
     });
   } catch (error) {
     console.error('Artifact upload failed:', error);
-    return NextResponse.json(
-      { ok: false, error: 'Failed to upload artifact' },
-      { status: 500 }
-    );
+    return NextResponse.json({ ok: false, error: 'Failed to upload artifact' }, { status: 500 });
   }
 }
