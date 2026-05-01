@@ -10,6 +10,7 @@ interface TextAnswerProps {
   placeholder?: string;
   multiline?: boolean;
   rows?: number;
+  normalizeSpokenNumbers?: boolean;
 }
 
 export function TextAnswer({
@@ -19,11 +20,13 @@ export function TextAnswer({
   placeholder,
   multiline = false,
   rows = 4,
+  normalizeSpokenNumbers = false,
 }: TextAnswerProps) {
   const [interimTranscript, setInterimTranscript] = useState('');
 
   const { isListening, isSupported, startListening, stopListening } = useSpeechRecognition({
     language: 'en-US',
+    normalizeSpokenNumbers,
     onResult: (text: string) => {
       onChange(value ? value + ' ' + text : text);
       setInterimTranscript('');

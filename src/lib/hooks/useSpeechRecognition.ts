@@ -12,6 +12,27 @@ interface UseSpeechRecognitionOptions {
   onResult?: (text: string) => void;
   onInterim?: (text: string) => void;
   onError?: (error: string) => void;
+  normalizeSpokenNumbers?: boolean;
+}
+
+const SPOKEN_DIGIT_MAP: Record<string, string> = {
+  zero: '0',
+  oh: '0',
+  one: '1',
+  two: '2',
+  three: '3',
+  four: '4',
+  five: '5',
+  six: '6',
+  seven: '7',
+  eight: '8',
+  nine: '9',
+};
+
+function normalizeSpokenDigits(text: string) {
+  return text.replace(/\b(zero|oh|one|two|three|four|five|six|seven|eight|nine)\b/gi, (match) => {
+    return SPOKEN_DIGIT_MAP[match.toLowerCase()] ?? match;
+  });
 }
 
 export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) {
@@ -20,6 +41,7 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
     onResult,
     onInterim,
     onError,
+    normalizeSpokenNumbers = false,
   } = options;
 
   const [isListening, setIsListening] = useState(false);
@@ -76,12 +98,20 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
         }
       }
 
-      if (interimTranscript) {
-        onInterimRef.current?.(interimTranscript);
+      const nextInterim = normalizeSpokenNumbers
+        ? normalizeSpokenDigits(interimTranscript)
+        : interimTranscript;
+
+      const nextFinal = normalizeSpokenNumbers
+        ? normalizeSpokenDigits(finalTranscript.trim())
+        : finalTranscript.trim();
+
+      if (nextInterim) {
+        onInterimRef.current?.(nextInterim);
       }
 
-      if (finalTranscript) {
-        onResultRef.current?.(finalTranscript.trim());
+      if (nextFinal) {
+        onResultRef.current?.(nextFinal);
       }
     };
 

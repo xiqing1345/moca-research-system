@@ -336,6 +336,7 @@ export function Task6Attention() {
           value={digitForwardInput}
           onChange={handleDigitForwardChange}
           placeholder="e.g., 2 1 8 5 4"
+          normalizeSpokenNumbers
         />
       </section>
 
@@ -349,6 +350,7 @@ export function Task6Attention() {
           value={digitBackwardInput}
           onChange={handleDigitBackwardChange}
           placeholder="e.g., 2 4 7"
+          normalizeSpokenNumbers
         />
       </section>
 
