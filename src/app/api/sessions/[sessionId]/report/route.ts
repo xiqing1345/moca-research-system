@@ -1,4 +1,3 @@
-import { prisma } from "@/lib/prisma/client";
 import { calculateAutoScore } from "@/lib/scoring/autoScore";
 import { NextResponse } from "next/server";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
@@ -282,31 +281,46 @@ function resolveScore(response: any): string {
   return "0";
 }
 
-export async function GET(
-  _req: Request,
+export async function POST(
+  req: Request,
   { params }: { params: Promise<{ sessionId: string }> }
 ) {
   try {
     const { sessionId } = await params;
+    const body = await req.json().catch(() => ({} as any));
 
-    const session = await prisma.session.findUnique({
-      where: { id: sessionId },
-      include: {
-        participant: true,
-        responses: true,
-      },
-    });
+    const rawResponses = Array.isArray(body?.responses)
+      ? body.responses
+      : Object.values(body?.responses ?? {});
 
-    if (!session) {
-      return NextResponse.json({ ok: false, error: "Session not found" }, { status: 404 });
+    const responses = rawResponses
+      .map((r: any) => ({ ...r, taskNumber: Number(r?.taskNumber) }))
+      .filter((r: any) => Number.isFinite(r.taskNumber));
+
+    if (!responses.length) {
+      return NextResponse.json(
+        { ok: false, error: "No task responses provided" },
+        { status: 400 }
+      );
     }
 
+    const participantCode =
+      typeof body?.participantCode === "string" && body.participantCode.trim()
+        ? body.participantCode.trim()
+        : "participant";
+
+    const submittedAt =
+      typeof body?.submittedAt === "string" && body.submittedAt.trim()
+        ? body.submittedAt.trim()
+        : null;
+
     const byTask = new Map<number, any>();
-    for (const r of session.responses ?? []) {
+    for (const r of responses) {
       byTask.set(Number(r.taskNumber), r);
     }
 
-    const fileName = `moca-report-${session.participant?.code ?? session.id}.pdf`;
+    const safeCode = participantCode.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40) || sessionId;
+    const fileName = `moca-report-${safeCode}.pdf`;
 
     const pdfDoc = await PDFDocument.create();
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -595,9 +609,9 @@ export async function GET(
 
     drawLines(["MoCA Personal Report"], { useBold: true, size: 17, lineHeight: 21 });
     drawLines([
-      `Participant Code: ${session.participant?.code ?? "-"}`,
-      `Session ID: ${session.id}`,
-      `Submitted At: ${formatDateTime(session.submittedAt)}`,
+      `Participant Code: ${participantCode}`,
+      `Session ID: ${sessionId}`,
+      `Submitted At: ${formatDateTime(submittedAt)}`,
       `Generated At: ${new Date().toISOString()}`,
     ], { size: 10.5, lineHeight: 14 });
     cursorY -= 6;
@@ -644,9 +658,9 @@ export async function GET(
     }
 
     const bytes = await pdfDoc.save();
-    const body = Buffer.from(bytes);
+    const pdfBody = Buffer.from(bytes);
 
-    return new NextResponse(body, {
+    return new NextResponse(pdfBody, {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",

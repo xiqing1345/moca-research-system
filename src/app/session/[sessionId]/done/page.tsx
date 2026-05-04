@@ -29,6 +29,8 @@ export default function DonePage() {
   const [loadingAdvice, setLoadingAdvice] = useState(false);
   const [adviceError, setAdviceError] = useState('');
   const [advice, setAdvice] = useState('');
+  const [downloadingReport, setDownloadingReport] = useState(false);
+  const [reportError, setReportError] = useState('');
   const [recommendation, setRecommendation] = useState<TierRecommendation | null>(null);
   const [totalScore, setTotalScore] = useState<number | null>(null);
   const hasWordGameRecommendation =
@@ -81,6 +83,62 @@ export default function DonePage() {
     }
   }, [sessionId]);
 
+  const handleDownloadReport = useCallback(async () => {
+    setDownloadingReport(true);
+    setReportError('');
+
+    try {
+      let responses: any[] = [];
+      let participantCode = '';
+      let submittedAt = '';
+
+      const raw = localStorage.getItem(`moca_session_${sessionId}`);
+      if (raw) {
+        const session = JSON.parse(raw);
+        responses = Object.values(session.responses ?? {});
+        participantCode = typeof session.participantCode === 'string' ? session.participantCode : '';
+        submittedAt = new Date().toISOString();
+      }
+
+      if (!responses.length) {
+        throw new Error('No response data found in this browser. Please complete the tasks on this device first.');
+      }
+
+      const response = await fetch(`/api/sessions/${sessionId}/report`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ responses, participantCode, submittedAt }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        const message =
+          (data && typeof data.error === 'string' && data.error) ||
+          `Failed to generate report (HTTP ${response.status})`;
+        throw new Error(message);
+      }
+
+      const blob = await response.blob();
+      const disposition = response.headers.get('Content-Disposition') ?? '';
+      const match = disposition.match(/filename="([^"]+)"/i);
+      const filename = match?.[1] ?? `moca-report-${sessionId}.pdf`;
+
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to download report';
+      setReportError(message);
+    } finally {
+      setDownloadingReport(false);
+    }
+  }, [sessionId]);
+
   useEffect(() => {
     // Auto-generate recommendation on completion page load.
     handleGetAdvice();
@@ -103,12 +161,20 @@ export default function DonePage() {
           </p>
         </div>
 
-        <a
-          href={`/api/sessions/${sessionId}/report`}
-          className="inline-block w-full mb-3 px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-semibold"
+        <button
+          type="button"
+          onClick={handleDownloadReport}
+          disabled={downloadingReport}
+          className="inline-block w-full mb-3 px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:bg-gray-400 font-semibold"
         >
-          Download My Report
-        </a>
+          {downloadingReport ? 'Generating Report...' : 'Download My Report'}
+        </button>
+
+        {reportError && (
+          <div className="mb-3 rounded border border-red-300 bg-red-50 p-3 text-left text-sm text-red-700">
+            {reportError}
+          </div>
+        )}
 
         <button
           type="button"
